@@ -9,7 +9,9 @@ from util import read_license_plate
 import pyrebase
 from firebase_admin import storage
 from firebase_admin import db
-from datetime import datetime
+#from datetime import datetime
+import datetime
+import requests
 
 front_light_violation1 = 'images/front_traffic_light/number_plate'
 if not os.path.exists(front_light_violation1):
@@ -100,12 +102,17 @@ firebase = pyrebase.initialize_app(config)
 storage = firebase.storage()
 db = firebase.database()
 
+#get time
+# now = datetime.now()
+# current_time = now.strftime("%H:%M:%S")
 # set location
+
+
 location = "https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d15857.823186462296!2d80.08955465947969!3d6.4637958678341905!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3ae22d305126dacb%3A0xb503df7f647ef4cd!2sWelipenna%20Interchange!5e0!3m2!1sen!2slk!4v1693501904033!5m2!1sen!2slk"
 
 # get time
-now = datetime.now()
-current_time = now.strftime("%H:%M:%S")
+#now = datetime.now()
+#current_time = now.strftime("%H:%M:%S")
 
 # output variables
 output_video_path = "output_video.mp4"
@@ -129,6 +136,9 @@ p_model = YOLO('last.pt')
 video_path = "Front_5.mp4"
 cap = cv2.VideoCapture(video_path)
 light_violated_count = []
+
+api_url = 'http://localhost:8060/violation/new'
+cam_id = 'CAM_001'
 
 # Loop through the video frames
 while cap.isOpened():
@@ -187,6 +197,8 @@ while cap.isOpened():
                 cv2.polylines(frame, [np.array(red_light_violation_area, np.int32)], True, (0, 0, 255), 1)
                 if red_light_violation_detection >= 0 and conf1 > 60:
 
+                    current_time = time.ctime()
+
                     cv2.circle(frame, (c_x, c_y), 2, (0, 0, 255), -1)
                     cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 0), 2)
                     cv2.rectangle(frame, (int(x3), int(y3)), (int(x4), int(y4)), (255, 0, 0), 2)
@@ -212,6 +224,24 @@ while cap.isOpened():
                     RLV_plate_crop = frame[int(y3):int(y4), int(x3):int(x4), :]
                     RLV_plate_image_filename = os.path.join(front_light_violation1, f'front_traffic_light_{v_id}.jpg')
                     image_trafficlight_plate = os.path.join(front_light_violation1, f'front_traffic_light_{v_id}.jpg')
+
+                    # Send the image to the Node.js server via API
+                    date = datetime.date.today()
+                    # current_time = time.ctime()
+                    files = {'file': open(RLV_vehicle_image_filename, 'rb')}
+                    data = {
+                        'type': 'red light violation',
+                        'year': str(date.year),
+                        'month': str(date.month),
+                        'day': str(date.day),
+                        'time': str(current_time),
+                        'location': location,
+                        'camId': cam_id
+                    }
+                    response = requests.post(api_url, data=data, files=files)
+                    print(response.text)
+
+
                     if RLV_plate_crop is not None and not RLV_plate_crop.size == 0:
                         cv2.imwrite(RLV_plate_image_filename, RLV_plate_crop)
                         storage.child(image_trafficlight_plate).put(image_trafficlight_plate)
